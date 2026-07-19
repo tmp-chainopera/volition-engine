@@ -1,0 +1,13 @@
+# 旧版单笔记本路径（会被自动迁移进 demo/data/default/）
+demo/notebook.json
+demo/notebook.json.tmp
+demo/workspace/
+demo/assets/
+# 多工作区数据 + 注册表
+demo/data/
+demo/workspaces.json
+demo/workspaces.json.tmp
+# 个人凭证（含密钥）
+demo/settings.json
+demo/settings.json.tmp
+node_modules/

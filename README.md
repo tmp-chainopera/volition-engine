@@ -1,49 +1,49 @@
-# 愿力引擎 · Volition Engine
+# Volition Engine · 愿力引擎
 
-[![中文](https://img.shields.io/badge/lang-中文-2ea44f?style=for-the-badge)](README.md)&nbsp;[![English](https://img.shields.io/badge/lang-English-lightgrey?style=for-the-badge)](README.en.md)
+[![English](https://img.shields.io/badge/lang-English-2ea44f?style=for-the-badge)](README.md)&nbsp;[![中文](https://img.shields.io/badge/lang-中文-lightgrey?style=for-the-badge)](README.zh.md)
 
-![愿力笔记本 · Volition Notebook](English.png)
+![Volition Notebook](English.png)
 
-> 让 Agent 从"你问一句、它答一句"，变成"你真正在意的事，它主动帮你推进落地"。
+> Turn an agent from *ask-and-answer* into *it proactively drives the things you truly care about*.
 
-## 这是什么
+## What is this
 
-你在聊天里表达一个想法，就等于给这件事**充了一点电**——我们叫它「愿力」。
+Express an idea in chat and you **charge it with a little power** — we call it *will* (愿力).
 
-想法你越常提、越上心，这件事的电就越足。攒过某个线，Agent 就从被动应答切换到**主动模式**：自己去搜集资料、匹配资源、一步步把事往落地推。反过来，你要是不再提了，电会自然漏掉，它也就慢慢降温、停下来——**它只把力气花在你持续在意的事上**。
+The more you bring it up and the more you care, the more charge it builds. Cross a threshold and the agent flips from passive replies to **proactive mode**: it gathers information, matches resources, and drives the thing toward done — on its own. Stop mentioning it and the charge quietly leaks away, so it cools down and stops. **It spends effort only on what you keep caring about.**
 
-## 愿力，就像电
+## Will, like electricity
 
-| | 现实里发生什么 | 系统里 |
+| | In real life | In the system |
 |---|---|---|
-| 🔌 充电 | 你表达、强化一个想法 | 这件事的愿力上涨 |
-| 🔋 自放电 | 你很久不提了 | 愿力随时间慢慢漏掉（想法自然淡忘）|
-| 🔥 点火 | 你是真的想做这件事 | 电攒够，Agent 转入主动、开始替你干 |
-| ⚡ 耗电 | 它持续替你运转 | 运行要耗电，电不够就自动停 |
+| 🔌 Charge | You express / reinforce an idea | That thing's will goes up |
+| 🔋 Self-discharge | You haven't mentioned it for a while | Will decays over time (the idea naturally fades) |
+| 🔥 Ignite | You genuinely want to do it | Enough charge → the agent goes proactive and starts working for you |
+| ⚡ Draw | It keeps running for you | Running draws power; when it's low it auto-stops |
 
-## 它能帮你做什么
+## What it does for you
 
-- **主动帮你推进多件事**，并按你在意的程度自动排先后，不用你手动管优先级。
-- **一个看板看到它此刻在忙什么**——哪件事在推进、进展到哪、烧了多少劲。
-- **多工作区**：每本笔记本互相隔离，引擎跨工作区在后台并行推进。
-- **花钱、下单、对外发消息这类现实动作，一定先问你批准**，绝不自作主张动你的钱和资源。
-- **你随手写的笔记和文档，就是它干活的纲要**——写下来，它下一步就照着调整。
-- **始终对齐你真实的意思**，一旦跑偏，会主动回来跟你确认，而不是闷头做错。
+- **Proactively advances several things at once**, auto-ordering them by how much you care — no manual priority juggling.
+- **One dashboard shows what it's doing right now** — which thing is progressing, how far, how much energy it's burning.
+- **Multiple workspaces**: each notebook is isolated; the engine advances them in parallel in the background.
+- **Real-world actions — spending, ordering, sending messages — always ask for your approval first.** It never touches your money or resources on its own.
+- **The notes and docs you jot down are its working brief** — write them and it adjusts its next step accordingly.
+- **Always aligned with what you actually mean**; if it drifts, it comes back to confirm with you instead of plowing ahead wrong.
 
-## 快速开始
+## Quick start
 
 ```bash
 cd demo
-node server.mjs          # 打开 http://localhost:5179
+node server.mjs          # open http://localhost:5179
 ```
 
-- 判断/对话层默认走 **Claude Code 订阅**（免 API Key），也可切到 **Anthropic API**。
-- 详细部署（依赖、两种计费模式、数据布局、安全、排错）见 **[docs/DEPLOY.md](docs/DEPLOY.md)**。
+- The judgment/chat layer runs on your **Claude Code subscription** by default (no API key), or can switch to the **Anthropic API**.
+- Full deployment (prerequisites, both billing modes, data layout, security, troubleshooting): **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
-## 了解更多
+## Learn more
 
-- [部署指南 docs/DEPLOY.md](docs/DEPLOY.md) —— 怎么装、怎么配、怎么排错。
-- [设计文档 docs/DESIGN.md](docs/DESIGN.md) —— 完整机制：愿力怎么算、怎么激发、怎么防跑偏。
-- [前端设计 docs/FRONTEND.md](docs/FRONTEND.md) —— 看板长什么样、怎么写笔记指挥它。
+- [Deployment guide — docs/DEPLOY.md](docs/DEPLOY.md) — how to install, configure, and troubleshoot.
+- [Design — docs/DESIGN.md](docs/DESIGN.md) — full mechanics: how will is computed, ignited, and kept from drifting.
+- [Frontend — docs/FRONTEND.md](docs/FRONTEND.md) — what the dashboard looks like and how notes steer it.
 
-> **可本地部署的开源项目**——自己部署、接入自己的 Claude 凭据（订阅或 API Key），数据全在本地。
+> **A locally-deployable open-source project** — self-host it, bring your own Claude credentials (subscription or API key); all data stays on your machine.

@@ -390,14 +390,17 @@ async function chat(res, body) {
 }
 
 // —— 给新增的重要发现打时间戳 ——
-// Agent 每轮把新发现「每条一行」追加进 重要发现.md。执行结束后由 server（本机本地时间）
-// 给还没有时间戳的行补上 [YYYY-MM-DD HH:MM]；已打过的行保持原始时间不变，
-// 于是用户能一眼看出哪些是新一天/新一轮加进来的。
+// Agent 每轮把新发现「每条一行」追加进 重要发现.md。执行结束后由 server 给还没有时间戳的行
+// 打上【带时区偏移的 ISO 时刻】（如 2026-07-20T14:00:00+08:00）；已打过的行保持不变。
+// 记录的是绝对时刻 → 前端按【浏览器本地时区】显示，即使 server 跑在 UTC(WSL/容器) 也对齐你的表。
 function fmtStamp(d) {
   const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  const off = -d.getTimezoneOffset(), abs = Math.abs(off);          // 本机时区偏移（分钟）
+  const tz = `${off >= 0 ? '+' : '-'}${p(Math.floor(abs / 60))}:${p(abs % 60)}`;
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}${tz}`;
 }
-const STAMP_RE = /^\s*\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?\]/; // 行首已有时间戳？（秒可选，兼容旧格式）
+// 行首是否已有时间戳（兼容带时区 ISO 与旧「日期 空格 时间」两种格式，避免重复打戳）
+const STAMP_RE = /^\s*\[\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/;
 function stampFindings(id, wsId = curWs()) {
   const fp = join(nodeWs(id, wsId), FINDINGS);
   if (!existsSync(fp)) return;

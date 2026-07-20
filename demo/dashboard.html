@@ -648,16 +648,21 @@ async function loadImages(id) {
 }
 
 // —— 重要发现 ——
-function todayStr() {
-  const d = new Date(), p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-// 把「[YYYY-MM-DD HH:MM] 正文」的行按天分组、最新在上渲染；今天的高亮。
+const _p2 = (n) => String(n).padStart(2, '0');
+const _localDate = (d) => `${d.getFullYear()}-${_p2(d.getMonth() + 1)}-${_p2(d.getDate())}`;
+const _localTime = (d) => `${_p2(d.getHours())}:${_p2(d.getMinutes())}:${_p2(d.getSeconds())}`;
+function todayStr() { return _localDate(new Date()); }
+// 把「[时间戳] 正文」的行按【浏览器本地时区】的天分组、最新在上渲染；今天的高亮。
 function renderFindings(content) {
   const today = todayStr();
   const items = content.split('\n').map((s) => s.trim()).filter(Boolean).map((line) => {
-    const m = line.match(/^\[(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}(?::\d{2})?)\]\s*(.*)$/);
-    return m ? { date: m[1], time: m[2], text: m[3] } : { date: '', time: '', text: line };
+    const m = line.match(/^\[([^\]]+)\]\s*([\s\S]*)$/);
+    if (m) {
+      // 带时区 ISO 直接按绝对时刻解析；旧「日期 空格 时间」补个 T 当本地时间解析
+      const d = new Date(m[1].includes('T') ? m[1] : m[1].replace(' ', 'T'));
+      if (!isNaN(d.getTime())) return { date: _localDate(d), time: _localTime(d), text: m[2] };
+    }
+    return { date: '', time: '', text: line };
   }).reverse(); // 文件是时间正序，反转 → 最新在上
   let html = '', curDate = null;
   for (const it of items) {

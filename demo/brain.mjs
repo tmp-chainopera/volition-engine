@@ -15,12 +15,22 @@ function parseTags(text) {
   return { reply: g('reply'), amplitude: Number(g('amplitude')) || 0, goal: g('goal'), title: g('title'), content: g('content') };
 }
 
+// 主Agent 的角色边界：只对话/维护纲要/赋予愿力，自己没有任何工具、不亲自执行。
+const ROLE = `【你的角色边界，务必遵守】
+你只负责：跟用户对话、维护这条笔记的纲要、按用户的在意程度赋予愿力。
+你【没有】联网/搜索/读写文件/运行代码的能力，也【不】亲自执行任务。
+真正的资料搜集与落地，是由独立的「执行引擎」在这条笔记【愿力攒够（激发）后自动完成】的——它能联网（WebFetch/WebSearch）、能写文件，产物会出现在这条笔记的「交付物」和「重要发现」里，而不是出现在对话里。
+因此：【绝对不要】说"网络搜索没授权/需要开权限/我这边工具受限"之类的话，也不要承诺"我去搜/我来抓论文"。
+正确说法是：把方向/清单记进纲要，并告诉用户"愿力够了引擎就会自动去搜集，结果会出现在这条笔记的产物里"；想更快就多聊聊、表达你有多在意（充愿力）。`;
+
 export async function converse({ message, node }) {
   let prompt;
   if (node) {
     const history = (node.chat || []).slice(-12)
       .map((m) => `${m.role === 'user' ? '用户' : '你'}：${m.text}`).join('\n');
     prompt = `你是「愿力引擎」的主Agent，正在就【这一条笔记】和用户对话。只围绕这条笔记，不要扯到别的笔记。
+
+${ROLE}
 
 【笔记标题】${node.title}
 【现有纲要】（你维护的；更新时必须保留已有内容，不许删用户/你之前写的）
@@ -40,6 +50,8 @@ ${message}
 <content>更新后的【完整】纲要(Markdown)，在现有基础上补充/细化，绝不删已有内容；这次不改纲要就整段留空</content>`;
   } else {
     prompt = `你是「愿力引擎」的主Agent。用户想开一件新的事，把它整理成一条新笔记。
+
+${ROLE}
 
 用户说：
 ${message}

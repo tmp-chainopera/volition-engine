@@ -148,6 +148,19 @@ function extractRepoUrls(textDoc) {
   const https = textDoc.match(/https?:\/\/[\w.\-]+\/[\w.\-/]+\.git/g) || [];
   return [...new Set([...ssh, ...https])];
 }
+// 从文档里抽取【本地目录】路径（Windows 盘符 或 POSIX 绝对路径），只保留【真实存在的目录】
+// → 执行时用 --add-dir 挂给执行器只读（原地读本地代码库，不复制、不 clone）
+function extractLocalDirs(textDoc) {
+  const win = textDoc.match(/[A-Za-z]:[\\/][^\s"'`<>|?*\n]+/g) || [];
+  const posix = textDoc.match(/(?:^|\s)(\/(?:Users|home|mnt|opt|srv)\/[^\s"'`<>|?*\n]+)/g) || [];
+  const cands = [...win, ...posix.map((s) => s.trim())];
+  const out = [];
+  for (let p of new Set(cands)) {
+    p = p.replace(/[.,;:)\]}】，。、）]+$/, ''); // 去掉句末标点
+    try { if (existsSync(p) && statSync(p).isDirectory()) out.push(p); } catch { /* 无效路径忽略 */ }
+  }
+  return out;
+}
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -438,8 +451,11 @@ async function runTick(wsId, id) {
   try {
     // 执行前：文档里写到的 git 仓库，自动 clone/pull 到工作目录（server 无沙箱、能联网）
     for (const u of extractRepoUrls(docText)) { try { await gitCloneOrPull(id, u, wsId); } catch { /* 单个失败不阻断 */ } }
+    // 文档里写到的【本地目录】挂给执行器只读（原地读本地代码库）
+    const addDirs = extractLocalDirs(docText);
+    if (addDirs.length) broadcast({ type: 'say', id, ws: wsId, text: `📂 已挂载本地目录(只读)：${addDirs.join(' , ')}` });
     const r = await runAgent({
-      docText, workspace: ws,
+      docText, workspace: ws, addDirs,
       onEvent: (ev) => {
         if (ev.type === 'system' && ev.subtype === 'init') broadcast({ type: 'init', id, ws: wsId, model: ev.model });
         else if (ev.type === 'assistant') for (const b of ev.message?.content ?? []) {

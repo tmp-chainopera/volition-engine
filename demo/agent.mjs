@@ -27,12 +27,15 @@ const SYSTEM = [
  * 跑一次执行。返回 { code, elapsedMs, costUsd, turns, summary }。
  * onEvent 收到解析后的 stream-json 事件（或 {type:'raw', line}）。
  */
-export function runAgent({ docPath, docText, workspace, onEvent = () => {} }) {
+export function runAgent({ docPath, docText, workspace, addDirs = [], onEvent = () => {} }) {
   const doc = docText != null ? docText : readFileSync(docPath, 'utf8');
 
   // 所有多行内容走 stdin，绝不进命令行参数（Windows/cmd 下换行参数会被截断）。
+  const localNote = addDirs.length
+    ? '\n【本地代码库】以下本地目录已挂载为可读（--add-dir），可直接用 Read/Glob/Grep 读取，不要去 clone：\n' + addDirs.map((d) => '  - ' + d).join('\n') + '\n'
+    : '';
   const prompt = [
-    SYSTEM, '',
+    SYSTEM, localNote,
     '下面三横线之间是《活文档》（执行纲要）。请在当前工作目录中执行它描述的意图：', '',
     '---', doc.trim(), '---', '',
     '现在开始执行。',
@@ -45,6 +48,8 @@ export function runAgent({ docPath, docText, workspace, onEvent = () => {} }) {
     // ⚠️ 已开放完整执行环境：Bash（跑代码/git/curl）+ 联网。用的是你本机真实环境与凭据。
     '--dangerously-skip-permissions',
     '--tools', 'Read,Write,Edit,Glob,Grep,Bash,WebFetch,WebSearch',
+    // 把文档里写到的本地目录挂进来供只读（原地读，不复制/不 clone）
+    ...addDirs.flatMap((d) => ['--add-dir', d]),
   ];
 
   const env = { ...process.env };

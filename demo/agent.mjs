@@ -108,8 +108,10 @@ export function runAgent({ docPath, docText, workspace, addDirs = [], onEvent = 
  * 「判断类」调用：拿模型最终输出的【原始文本】（信封是合法 JSON，但里面的文本不强制 JSON）。
  * 用于标签格式解析——比让模型输出 JSON 更稳（不怕引号/换行没转义）。走订阅计费。
  */
-export function callClaudeText(prompt, { model = 'sonnet' } = {}) {
+export function callClaudeText(prompt, { model = 'sonnet', tools = null } = {}) {
   const args = ['-p', '--model', model, '--output-format', 'json'];
+  // 可选：给判断层挂只读联网工具（主Agent 边聊边查）。无头没人批准 → 跳过权限（只读，安全）。
+  if (tools) args.push('--tools', tools, '--dangerously-skip-permissions');
   const env = { ...process.env };
   delete env.ANTHROPIC_API_KEY;
   return new Promise((resolve, reject) => {

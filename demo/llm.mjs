@@ -50,11 +50,12 @@ async function apiText(prompt, { model, apiKey, baseURL }) {
   return { text, cost };
 }
 
-/** 判断/对话类：拿模型最终【文本】（标签格式由调用方解析）。按当前后端分派。 */
-export async function callText(prompt) {
+/** 判断/对话类：拿模型最终【文本】（标签格式由调用方解析）。按当前后端分派。
+ *  opts.tools（如 'WebSearch,WebFetch'）：让主Agent 边聊边查；仅 claude-code 后端支持（API 后端暂忽略）。 */
+export async function callText(prompt, opts = {}) {
   const cfg = llmConfig();
-  if (cfg.backend === 'api') return apiText(prompt, cfg);
-  return callClaudeText(prompt, { model: cfg.model }); // 订阅：复用 Claude Code CLI
+  if (cfg.backend === 'api') return apiText(prompt, cfg); // TODO: API 后端可接 web_search server tool
+  return callClaudeText(prompt, { model: cfg.model, tools: opts.tools }); // 订阅：复用 Claude Code CLI
 }
 
 /** 判断类：要求模型只输出 JSON，解析成对象（附 _cost）。按当前后端分派。 */

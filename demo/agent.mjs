@@ -27,7 +27,15 @@ const SYSTEM = [
  * 跑一次执行。返回 { code, elapsedMs, costUsd, turns, summary }。
  * onEvent 收到解析后的 stream-json 事件（或 {type:'raw', line}）。
  */
-export function runAgent({ docPath, docText, workspace, addDirs = [], onEvent = () => {} }) {
+// 杀掉执行进程（Windows 下 shell:true 会有子进程树，用 taskkill /T 连根拔）
+function killTree(child) {
+  try {
+    if (process.platform === 'win32' && child.pid) spawn('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+    else child.kill('SIGKILL');
+  } catch { /* 已退出就忽略 */ }
+}
+
+export function runAgent({ docPath, docText, workspace, addDirs = [], signal = null, onEvent = () => {} }) {
   const doc = docText != null ? docText : readFileSync(docPath, 'utf8');
 
   // 所有多行内容走 stdin，绝不进命令行参数（Windows/cmd 下换行参数会被截断）。
@@ -70,7 +78,13 @@ export function runAgent({ docPath, docText, workspace, addDirs = [], onEvent = 
       shell: process.platform === 'win32',
       stdio: ['pipe', 'pipe', 'inherit'],
     });
-    const result = { code: null, elapsedMs: 0, costUsd: 0, turns: 0, summary: '' };
+    const result = { code: null, elapsedMs: 0, costUsd: 0, turns: 0, summary: '', aborted: false };
+
+    // 暂停/停止：外部 abort → 连根杀掉执行进程
+    if (signal) {
+      if (signal.aborted) killTree(child);
+      else signal.addEventListener('abort', () => { result.aborted = true; killTree(child); }, { once: true });
+    }
 
     child.stdin.write(prompt);
     child.stdin.end();

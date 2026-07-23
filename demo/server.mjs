@@ -84,7 +84,7 @@ function deleteWorkspace(id) {
 const loadSettings = () => existsSync(SETTINGS_PATH) ? JSON.parse(readFileSync(SETTINGS_PATH, 'utf8')) : { credentials: [] };
 const saveSettings = (s) => { const tmp = SETTINGS_PATH + '.tmp'; writeFileSync(tmp, JSON.stringify(s, null, 2)); renameSync(tmp, SETTINGS_PATH); };
 const ENGINE_INTERVAL_MS = 6000; // 引擎巡检间隔
-const running = new Set();       // 正在执行的节点 id
+const running = new Map();        // 正在执行：rk(ws,id) → AbortController（用于手动暂停/停止）
 const MAX_CONCURRENT = 2;        // 最多同时跑几个笔记（订阅额度考虑；可调）
 
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
@@ -224,6 +224,8 @@ const server = http.createServer(async (req, res) => {
         id: node.id, title: node.title, kind: node.kind, content: node.content, userNote: node.userNote || '',
         will: +will(node.ledger).toFixed(1), state: node.ledger.state,
         stuck: isStuck(node.ledger), stuckCount: stuckCount(node.ledger), // 退避
+        paused: !!node.paused,          // 手动暂停中
+        running: running.has(rk(curWs(), node.id)), // 当前是否正在执行
         impulses: node.ledger.impulses.map((im) => ({ a: +im.a.toFixed(1), text: im.text || '', goal: im.goal || '' })).reverse(),
         chat: node.chat || [],          // 本笔记的对话线程
         runs: node.runs || [],          // 最近执行记录（时间正序）
@@ -366,6 +368,20 @@ const server = http.createServer(async (req, res) => {
       NB.save(nb, nbPath());
       return json(res, 200, { ok: true });
     }
+    // 暂停 / 继续某条笔记：暂停=停手且引擎不再自动触发；继续=解除暂停
+    if (p === '/api/node/pause' && req.method === 'POST') {
+      const { id, paused } = JSON.parse((await readBody(req)) || '{}');
+      const ws = curWs(); const nb = NB.load(nbPath(ws)); const node = NB.getNode(nb, id);
+      if (!node) return json(res, 404, { error: 'no node' });
+      node.paused = (paused === undefined) ? !node.paused : !!paused; // 不传则切换
+      NB.save(nb, nbPath(ws));
+      if (node.paused) {                              // 暂停：中止正在跑的执行
+        const ctl = running.get(rk(ws, id));
+        if (ctl) { try { ctl.abort(); } catch {} }
+      }
+      broadcast({ type: node.paused ? 'paused' : 'resumed', id, ws, title: node.title });
+      return json(res, 200, { ok: true, paused: node.paused });
+    }
 
     if (p === '/api/chat' && req.method === 'POST') return chat(res, await readBody(req));
     if (p === '/api/reset' && req.method === 'POST') { NB.resetNotebook(nbPath()); return json(res, 200, { ok: true, tree: NB.treeView(NB.load(nbPath())) }); }
@@ -436,13 +452,15 @@ async function runTick(wsId, id) {
   const nb = NB.load(np);
   const node = NB.getNode(nb, id);
   if (!node) return;
+  if (node.paused) { NB.save(nb, np); broadcast({ type: 'refused', id, ws: wsId, title: node.title, reason: 'paused' }); return; } // 手动暂停中，不执行
   const gate = tickGate(node.ledger);
   if (!gate.allowed) { NB.save(nb, np); broadcast({ type: 'refused', id, ws: wsId, title: node.title, reason: gate.reason, will: +gate.will.toFixed(1) }); return; }
   // 执行文档 = 本节点内容 + 所有子笔记（子笔记是对这件事的补充/细化）
   const docText = NB.subtreeDoc(nb, id);
   if (!docText.trim()) { NB.save(nb, np); broadcast({ type: 'refused', id, ws: wsId, title: node.title, reason: 'empty_doc' }); return; }
 
-  running.add(key);
+  const controller = new AbortController();
+  running.set(key, controller);      // 存控制器，供手动暂停时中止
   node.ledger.lastRun = Date.now(); // 冷却起点：执行不扣愿力，用冷却间隔防止连轰
   NB.save(nb, np);
   broadcast({ type: 'start', id, ws: wsId, title: node.title, will: +gate.will.toFixed(1) });
@@ -455,7 +473,7 @@ async function runTick(wsId, id) {
     const addDirs = extractLocalDirs(docText);
     if (addDirs.length) broadcast({ type: 'say', id, ws: wsId, text: `📂 已挂载本地目录(只读)：${addDirs.join(' , ')}` });
     const r = await runAgent({
-      docText, workspace: ws, addDirs,
+      docText, workspace: ws, addDirs, signal: controller.signal,
       onEvent: (ev) => {
         if (ev.type === 'system' && ev.subtype === 'init') broadcast({ type: 'init', id, ws: wsId, model: ev.model });
         else if (ev.type === 'assistant') for (const b of ev.message?.content ?? []) {
@@ -467,6 +485,10 @@ async function runTick(wsId, id) {
       },
     });
     stampFindings(id, wsId); // 给本轮新写入的重要发现补时间戳（发现文件不参与放呆指纹，不影响退避）
+    if (r.aborted) { // 手动暂停中止：不算卡住、不记这次执行
+      broadcast({ type: 'paused', id, ws: wsId, title: node.title });
+      return;
+    }
     // 放呆：交付物指纹连续几次没变 → 卡住计数++，冷却指数退避（不硬停，让愿力自然衰减）
     const nb2 = NB.load(np); const node2 = NB.getNode(nb2, id);
     let becameStuck = false;
@@ -507,7 +529,7 @@ function engineCycle() {
     let nb; try { nb = NB.load(np); } catch { continue; } // 工作区可能刚被删
     let changed = false;
     for (const n of nb.nodes) {
-      if (n.kind !== 'exec' || !n.content || !n.content.trim() || running.has(rk(w.id, n.id))) continue;
+      if (n.kind !== 'exec' || n.paused || !n.content || !n.content.trim() || running.has(rk(w.id, n.id))) continue;
       const before = n.ledger.state; refreshState(n.ledger); if (n.ledger.state !== before) changed = true;
       // 激发态 且 距上次执行已过【退避后的】冷却间隔（卡住越久间隔越长，愿力照常衰减）
       if (n.ledger.state === 'IGNITED' && (now - (n.ledger.lastRun || 0) >= effectiveCooldownMs(n.ledger)))

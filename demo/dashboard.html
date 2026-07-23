@@ -100,6 +100,8 @@
   .b-DORMANT { background: #10161d; color: #8b95a3; }
   .b-SUSPENDED { background: var(--red-deep); color: var(--red); }
   .b-STUCK { background: var(--ice-deep); color: var(--ice); }
+  .b-PAUSED { background: #2a2410; color: var(--amber); }
+  .node.paused .t { color: var(--muted); text-decoration: line-through; opacity: .7; }
   .stuckbar {
     background: var(--ice-deep); color: var(--ice); font: 700 12px/1.3 var(--mono); letter-spacing: .06em;
     padding: 3px 11px; cursor: pointer; border: 1px solid var(--ice);
@@ -318,7 +320,9 @@ const I18N = {
     agentDocTitle: '主Agent 纲要（它从对话自动维护 · 只读）', agentDocEmpty: '主Agent 还没整理这件事。去右边跟它聊。',
     l1Title: '这件事的表达记录（L1）', findingsTitle: '重要发现（Agent 记录 · 你来归档）', filesTitle: '交付物（★ 收藏排前）',
     autoSave: '自动保存', saved: '已保存 ✓', unsaved: '未保存…',
-    st_IGNITED: '激发中', st_DORMANT: '蓄力中', st_SUSPENDED: '已停', st_COOLING: '❄ 冷却中',
+    st_IGNITED: '激发中', st_DORMANT: '蓄力中', st_SUSPENDED: '已停', st_COOLING: '❄ 冷却中', st_PAUSED: '⏸ 已暂停',
+    pause: '⏸ 暂停', resume: '▶ 继续',
+    pausedHint: '⏸ 已手动暂停：引擎不会自动执行这条笔记，正在跑的也已停下。点「▶ 继续」恢复。',
     hintIgnited: '✅ 愿力已过激发线，引擎会自动推进这条笔记——你不用点任何东西。',
     hintSuspended: '🪫 愿力随时间衰减到了停机线以下，自动停了。想让它继续，去右边多跟主Agent 聊聊这件事。',
     hintDormant: '💤 愿力还没到激发线。去右边跟主Agent 说说这件事、有多在意，攒够就会自动开干。',
@@ -355,7 +359,9 @@ const I18N = {
     agentDocTitle: 'Agent outline (auto-maintained from chat · read-only)', agentDocEmpty: "The agent hasn't outlined this yet. Chat on the right.",
     l1Title: 'Expression log (L1)', findingsTitle: 'Key findings (agent records · you archive)', filesTitle: 'Deliverables (★ favorites first)',
     autoSave: 'Auto-save', saved: 'Saved ✓', unsaved: 'Unsaved…',
-    st_IGNITED: 'Ignited', st_DORMANT: 'Charging', st_SUSPENDED: 'Stopped', st_COOLING: '❄ Cooling',
+    st_IGNITED: 'Ignited', st_DORMANT: 'Charging', st_SUSPENDED: 'Stopped', st_COOLING: '❄ Cooling', st_PAUSED: '⏸ Paused',
+    pause: '⏸ Pause', resume: '▶ Resume',
+    pausedHint: '⏸ Manually paused: the engine will not run this note, and any running execution has been stopped. Click "▶ Resume" to continue.',
     hintIgnited: '✅ Will is above the ignite line; the engine advances this note automatically — nothing to click.',
     hintSuspended: '🪫 Will decayed below the stop line and it stopped. To resume, chat more about it on the right.',
     hintDormant: '💤 Will is below the ignite line. Tell the agent about it and how much you care; once high enough it runs automatically.',
@@ -498,7 +504,7 @@ async function loadTree() {
     const hasKids = (byParent[n.id] || []).length > 0;
     const isCollapsed = collapsed.has(n.id);
     const row = document.createElement('div');
-    row.className = 'node st-' + n.state + (n.stuck ? ' stuck' : '') + (n.id === selected ? ' sel' : '');
+    row.className = 'node st-' + n.state + (n.stuck ? ' stuck' : '') + (n.paused ? ' paused' : '') + (n.id === selected ? ' sel' : '');
     row.style.paddingLeft = 6 + depth * 14 + 'px';
     const icon = n.kind === 'folder' ? '📁' : '📄';
     const fill = Math.min(100, (n.will / max) * 100);
@@ -558,24 +564,29 @@ async function selectNode(id) {
   loadTree();
   const impulses = (n.impulses || []).map((im) => `<div class="dim" style="font-size:12px">🗣 +${im.a} ${esc(im.text)}</div>`).join('');
   const lastSummary = (n.runs && n.runs.length) ? (n.runs[n.runs.length - 1].summary || '') : '';
-  const hint = n.stuck
-    ? (lastSummary
-        ? `${t('stuckAt')}<div style="margin-top:4px;max-height:180px;overflow:auto;white-space:pre-wrap;color:#cfe6ff">${esc(lastSummary)}</div>`
-        : t('st_COOLING'))
-    : n.state === 'IGNITED'
-      ? t('hintIgnited')
-      : n.state === 'SUSPENDED'
-        ? t('hintSuspended')
-        : t('hintDormant');
+  const hint = n.paused
+    ? t('pausedHint')
+    : n.stuck
+      ? (lastSummary
+          ? `${t('stuckAt')}<div style="margin-top:4px;max-height:180px;overflow:auto;white-space:pre-wrap;color:#cfe6ff">${esc(lastSummary)}</div>`
+          : t('st_COOLING'))
+      : n.state === 'IGNITED'
+        ? t('hintIgnited')
+        : n.state === 'SUSPENDED'
+          ? t('hintSuspended')
+          : t('hintDormant');
+  const badgeCls = n.paused ? 'b-PAUSED' : (n.stuck ? 'b-STUCK' : 'b-' + n.state);
+  const badgeTxt = n.paused ? t('st_PAUSED') : (n.stuck ? t('st_COOLING') : t('st_' + n.state));
   $('editor').innerHTML = `
     <div class="row"><span id="ntitle">${esc(n.title)}</span>
-      <span class="badge ${n.stuck ? 'b-STUCK' : 'b-' + n.state}">${n.stuck ? t('st_COOLING') : t('st_' + n.state)}</span>
+      <span class="badge ${badgeCls}">${badgeTxt}</span>
       <span class="dim">${n.will} WP</span></div>
     <div class="row">
+      ${n.kind === 'exec' ? `<button class="mini-btn ${n.paused ? 'primary' : ''}" onclick="togglePause(${n.paused})">${n.paused ? t('resume') : t('pause')}</button>` : ''}
       <button class="mini-btn" onclick="newNote(selected)">${t('childNote')}</button>
       <button class="mini-btn" onclick="renameNode()">${t('rename')}</button>
       <button class="mini-btn" onclick="deleteNode()">${t('del')}</button>
-      ${n.stuck ? `<button class="mini-btn" onclick="unfreezeNode()">${t('resetBackoff')}</button>` : ''}</div>
+      ${n.stuck && !n.paused ? `<button class="mini-btn" onclick="unfreezeNode()">${t('resetBackoff')}</button>` : ''}</div>
     <div class="${n.stuck ? 'stuckhint' : 'dim'}" style="margin:4px 0 8px">${hint}</div>
     <h2 style="margin-top:6px"><span data-i18n="myNoteTitle">${t('myNoteTitle')}</span><span style="flex:1"></span><button class="mini-btn" onclick="copyBox('ncontent')">${t('copy')}</button></h2>
     <textarea id="ncontent" spellcheck="false" placeholder="${t('myNotePlaceholder')}">${esc(n.userNote || '')}</textarea>
@@ -708,7 +719,7 @@ function connectEngine() {
     const d = JSON.parse(e.data);
     if (d.type === 'ping') return;
     if (d.ws && curWs && d.ws !== curWs) return;                                         // 只看当前工作区的动态
-    if (['start', 'result', 'refused', 'frozen'].includes(d.type)) loadTree();          // 树全局刷新
+    if (['start', 'result', 'refused', 'frozen', 'paused', 'resumed'].includes(d.type)) loadTree(); // 树全局刷新
     if (d.id !== selected) return;                                                     // 面板只看当前笔记
     switch (d.type) {
       case 'start': efeed('ok', `⚡ 开始执行（愿力 ${d.will}）`); break;
@@ -718,6 +729,8 @@ function connectEngine() {
       case 'error': efeed('bad', '⚠️ ' + d.text); break;
       case 'refused': if (d.reason === 'suspended') efeed('bad', '🪫 愿力衰减到停机线，停了'); break;
       case 'stuck': efeed('dim', '❄ 连续无新产出 → 进入冷却放慢（跑得越来越慢，愿力衰减后自然停）'); selectNode(selected); break;
+      case 'paused': efeed('bad', '⏸ 已暂停：停手，引擎不再自动执行'); if (selected === d.id) selectNode(selected); break;
+      case 'resumed': efeed('ok', '▶ 已继续：恢复自动执行'); if (selected === d.id) selectNode(selected); break;
       case 'result':
         efeed('ok', `✅ 执行完成（${d.seconds}s · 愿力 ${d.will}）`);
         loadFiles(selected); loadFindings(selected); loadImages(selected); break; // 刷新产物/发现，不清空动态
@@ -818,6 +831,12 @@ async function unfreezeNode() { // 重置退避
   if (!selected) return;
   await fetch('/api/node/unfreeze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selected }) });
   toast('↺ 已重置退避'); await loadTree(); selectNode(selected);
+}
+async function togglePause(currentlyPaused) { // 暂停 / 继续
+  if (!selected) return;
+  const paused = !currentlyPaused;
+  await fetch('/api/node/pause', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selected, paused }) });
+  toast(paused ? t('pause') : t('resume')); await loadTree(); selectNode(selected);
 }
 async function deleteNode() {
   if (!selected) return;

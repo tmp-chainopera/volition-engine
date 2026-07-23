@@ -58,6 +58,7 @@ export function treeView(nb) {
       will: +will(n.ledger).toFixed(1), state: n.ledger.state,
       impulses: n.ledger.impulses.length,
       stuck: isStuck(n.ledger),           // 连续无新产出 → 退避中（红标）
+      paused: !!n.paused,                 // 手动暂停中
     };
   });
 }

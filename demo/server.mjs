@@ -383,6 +383,32 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, paused: node.paused });
     }
 
+    // 归档表达记录(L1)：把当前所有表达条目写成带时间戳的文档，清空列表，但【保留当前愿力】
+    if (p === '/api/node/archive-l1' && req.method === 'POST') {
+      const { id } = JSON.parse((await readBody(req)) || '{}');
+      const ws = curWs(); const np = nbPath(ws); const nb = NB.load(np); const node = NB.getNode(nb, id);
+      if (!node) return json(res, 404, { error: 'no node' });
+      const imps = node.ledger.impulses || [];
+      if (!imps.length) return json(res, 200, { ok: true, archived: 0 });
+      // 生成带时间戳的归档文档（追加到笔记工作区的「表达记录_已归档.md」）
+      const rows = imps.map((im) => {
+        const when = im.t ? fmtStamp(new Date(im.t)) : '?';
+        const goal = im.goal ? `　（目标：${im.goal}）` : '';
+        return `- [${when}] +${(+im.a || 0).toFixed(1)}　${(im.text || '').replace(/\n/g, ' ')}${goal}`;
+      });
+      const section = `\n## 归档于 [${fmtStamp(new Date())}]（${imps.length} 条表达）\n${rows.join('\n')}\n`;
+      const dir = nodeWs(id, ws); mkdirSync(dir, { recursive: true });
+      const fp = join(dir, '表达记录_已归档.md');
+      writeFileSync(fp, (existsSync(fp) ? readFileSync(fp, 'utf8') : `# 表达记录归档 · ${node.title}\n`) + section);
+      // 保留当前愿力：把多条合并成一条 carry-over（不动 stuck/退避、不改状态）
+      const W = will(node.ledger);
+      node.ledger.impulses = W > 0
+        ? [{ t: Date.now(), a: +W.toFixed(2), text: `（已归档 ${imps.length} 条表达，合并保留当前愿力 ${W.toFixed(1)}）`, archived: true }]
+        : [];
+      NB.save(nb, np);
+      return json(res, 200, { ok: true, archived: imps.length, will: +W.toFixed(1) });
+    }
+
     if (p === '/api/chat' && req.method === 'POST') return chat(res, await readBody(req));
     if (p === '/api/reset' && req.method === 'POST') { NB.resetNotebook(nbPath()); return json(res, 200, { ok: true, tree: NB.treeView(NB.load(nbPath())) }); }
     // 手动"催一下"（可选）：立刻触发某节点一次；效果与自治引擎相同，动态走全局事件流

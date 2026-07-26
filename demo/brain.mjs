@@ -12,7 +12,17 @@ function parseTags(text) {
     const m = text.match(new RegExp('<' + tag + '>([\\s\\S]*?)</' + tag + '>', 'i'));
     return m ? m[1].trim() : '';
   };
-  return { reply: g('reply'), amplitude: Number(g('amplitude')) || 0, goal: g('goal'), title: g('title'), content: g('content') };
+  let reply = g('reply');
+  // 兜底：模型有时（尤其联网查完写长回答时）忘了套 <reply> 标签。
+  // 这时不要丢掉它说的话——把 amplitude/goal/title/content 整块删掉，剩下的散文当作回复。
+  if (!reply) {
+    const stripped = text
+      .replace(/<(amplitude|goal|title|content)>[\s\S]*?<\/\1>/gi, '') // 删完整标签块
+      .replace(/<\/?[a-z]+>/gi, '')                                     // 删残留孤立标签
+      .trim();
+    if (stripped) reply = stripped;
+  }
+  return { reply, amplitude: Number(g('amplitude')) || 0, goal: g('goal'), title: g('title'), content: g('content') };
 }
 
 // 主Agent 的角色边界：可【轻量联网查询】即时答疑；重活（写文件/多步落地）交执行引擎。
